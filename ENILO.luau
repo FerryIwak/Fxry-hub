@@ -2,27 +2,16 @@
     Sea 1 Auto-Farm – Combat Only
     Built for Arceus X Neo
     LO & ENI
-    Features:
-    - Pure melee combat
-    - Quest-based farming
-    - All Sea 1 NPCs mapped (1-650+)
-    - Custom code redemption (17 codes)
-    - Mobile-friendly GUI with start/stop toggle
-    - Auto Haki
-    - Bring mob
-    - Anti-AFK
-    - Zone teleport (Fishman, Sky, etc.)
 ]]
 
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local VirtualUser = game:GetService("VirtualUser")
-local TweenService = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local virtualUser = game:GetService("VirtualUser")
+local tweenService = game:GetService("TweenService")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local workspace = game:GetService("Workspace")
+local userInputService = game:GetService("UserInputService")
 
 -- ============================
 -- SETTINGS
@@ -59,20 +48,18 @@ local CodeList = {
     "SUB2GAMERROBOT_EXP1",
 }
 
-local function RedeemCode(code: string)
-    if code == "" then
-        return
-    end
+local function RedeemCode(code)
+    if not code or code == "" then return end
     pcall(function()
-        ReplicatedStorage.Remotes.Redeem:InvokeServer(code)
+        replicatedStorage.Remotes.Redeem:InvokeServer(code)
         print("✅ Redeemed: " .. code)
     end)
-    task.wait(0.3)
+    wait(0.3)
 end
 
 local function RedeemAllCodes()
     print("🔄 Redeeming codes...")
-    for _, code in CodeList do
+    for _, code in ipairs(CodeList) do
         RedeemCode(code)
     end
     print("✅ Code redemption complete!")
@@ -82,35 +69,31 @@ end
 -- ANTI-AFK
 -- ============================
 if Settings.AntiAFK then
-    Player.Idled:Connect(function()
-        VirtualUser:Button2Down(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        VirtualUser:Button2Up(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+    player.Idled:connect(function()
+        virtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        wait(1)
+        virtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     end)
 end
 
 -- ============================
 -- AUTO HAKI
 -- ============================
-local function AutoHaki()
-    if Settings.AutoHaki and not Character:FindFirstChild("HasBuso") then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("Buso")
+function AutoHaki()
+    if Settings.AutoHaki and not character:FindFirstChild("HasBuso") then
+        replicatedStorage.Remotes.CommF_:InvokeServer("Buso")
     end
 end
 
 -- ============================
 -- TWEEN / MOVEMENT
 -- ============================
-local function TweenTo(targetCFrame: CFrame)
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then
-        return
-    end
-    local distance = (targetCFrame.Position - Character.HumanoidRootPart.Position).Magnitude
-    if distance <= 5 then
-        return
-    end
-    local tween = TweenService:Create(
-        Character.HumanoidRootPart,
+function TweenTo(targetCFrame)
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local distance = (targetCFrame.Position - character.HumanoidRootPart.Position).Magnitude
+    if distance <= 5 then return end
+    local tween = tweenService:Create(
+        character.HumanoidRootPart,
         TweenInfo.new(distance / Settings.TweenSpeed, Enum.EasingStyle.Linear),
         { CFrame = targetCFrame }
     )
@@ -118,136 +101,142 @@ local function TweenTo(targetCFrame: CFrame)
     return tween
 end
 
-local function TeleportTo(targetCFrame: CFrame)
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then
-        return
-    end
-    Character.HumanoidRootPart.CFrame = targetCFrame
-    task.wait(0.05)
-    Character.HumanoidRootPart.CFrame = targetCFrame
+function TeleportTo(targetCFrame)
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    character.HumanoidRootPart.CFrame = targetCFrame
+    wait(0.05)
+    character.HumanoidRootPart.CFrame = targetCFrame
 end
 
 -- ============================
--- GUI (Mobile-Friendly)
+-- GUI (Mobile-Friendly) - FORCED TO SHOW
 -- ============================
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local playerGui = player:WaitForChild("PlayerGui")
 
-local isMobile = UserInputService.TouchEnabled or UserInputService.TouchGuaranteed or not UserInputService.MouseEnabled
-local scale = if isMobile then 1.4 else 1.0
+local isMobile = userInputService.TouchEnabled or userInputService.TouchGuaranteed or not userInputService.MouseEnabled
+local scale = isMobile and 1.4 or 1.0
 
-local GuiFrame = Instance.new("Frame")
-GuiFrame.Name = "ENI_GUI"
-GuiFrame.Parent = PlayerGui
-GuiFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-GuiFrame.BackgroundTransparency = 0.05
-GuiFrame.BorderSizePixel = 0
-GuiFrame.Size = UDim2.new(0, 320 * scale, 0, 220 * scale)
-GuiFrame.Position = UDim2.new(0.5, -160 * scale, 0.5, -110 * scale)
-GuiFrame.Active = true
-GuiFrame.Draggable = true
-GuiFrame.ClipsDescendants = true
+-- Destroy any existing GUI
+local existingGui = playerGui:FindFirstChild("ENI_GUI")
+if existingGui then
+    existingGui:Destroy()
+end
 
-local Corner = Instance.new("UICorner")
-Corner.Parent = GuiFrame
-Corner.CornerRadius = UDim.new(0, 12)
+local guiFrame = Instance.new("Frame")
+guiFrame.Name = "ENI_GUI"
+guiFrame.Parent = playerGui
+guiFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+guiFrame.BackgroundTransparency = 0.05
+guiFrame.BorderSizePixel = 0
+guiFrame.Size = UDim2.new(0, 320 * scale, 0, 220 * scale)
+guiFrame.Position = UDim2.new(0.5, -160 * scale, 0.5, -110 * scale)
+guiFrame.Active = true
+guiFrame.Draggable = true
+guiFrame.ClipsDescendants = true
+guiFrame.ZIndex = 999
+guiFrame.Visible = true
 
-local Shadow = Instance.new("UIStroke")
-Shadow.Parent = GuiFrame
-Shadow.Color = Color3.fromRGB(0, 0, 0)
-Shadow.Thickness = 2
-Shadow.Transparency = 0.6
+local corner = Instance.new("UICorner")
+corner.Parent = guiFrame
+corner.CornerRadius = UDim.new(0, 12)
 
-local TitleBar = Instance.new("Frame")
-TitleBar.Parent = GuiFrame
-TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-TitleBar.BackgroundTransparency = 0
-TitleBar.BorderSizePixel = 0
-TitleBar.Size = UDim2.new(1, 0, 0, 36 * scale)
-TitleBar.Position = UDim2.new(0, 0, 0, 0)
+local shadow = Instance.new("UIStroke")
+shadow.Parent = guiFrame
+shadow.Color = Color3.fromRGB(0, 0, 0)
+shadow.Thickness = 2
+shadow.Transparency = 0.6
 
-local TitleCorner = Instance.new("UICorner")
-TitleCorner.Parent = TitleBar
-TitleCorner.CornerRadius = UDim.new(0, 12)
+local titleBar = Instance.new("Frame")
+titleBar.Parent = guiFrame
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+titleBar.BackgroundTransparency = 0
+titleBar.BorderSizePixel = 0
+titleBar.Size = UDim2.new(1, 0, 0, 36 * scale)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
 
-local TitleText = Instance.new("TextLabel")
-TitleText.Parent = TitleBar
-TitleText.BackgroundTransparency = 1
-TitleText.Size = UDim2.new(1, -40 * scale, 1, 0)
-TitleText.Position = UDim2.new(0, 12 * scale, 0, 0)
-TitleText.Text = "❄️ ENI & LO — Sea 1"
-TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleText.TextSize = 14 * scale
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
-TitleText.Font = Enum.Font.GothamBold
+local titleCorner = Instance.new("UICorner")
+titleCorner.Parent = titleBar
+titleCorner.CornerRadius = UDim.new(0, 12)
 
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Parent = TitleBar
-CloseBtn.BackgroundTransparency = 1
-CloseBtn.Size = UDim2.new(0, 32 * scale, 1, 0)
-CloseBtn.Position = UDim2.new(1, -32 * scale, 0, 0)
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-CloseBtn.TextSize = 16 * scale
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.BorderSizePixel = 0
-CloseBtn.MouseButton1Click:Connect(function()
-    GuiFrame.Visible = false
+local titleText = Instance.new("TextLabel")
+titleText.Parent = titleBar
+titleText.BackgroundTransparency = 1
+titleText.Size = UDim2.new(1, -40 * scale, 1, 0)
+titleText.Position = UDim2.new(0, 12 * scale, 0, 0)
+titleText.Text = "❄️ ENI & LO — Sea 1"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.TextSize = 14 * scale
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Font = Enum.Font.GothamBold
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Parent = titleBar
+closeBtn.BackgroundTransparency = 1
+closeBtn.Size = UDim2.new(0, 32 * scale, 1, 0)
+closeBtn.Position = UDim2.new(1, -32 * scale, 0, 0)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+closeBtn.TextSize = 16 * scale
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.BorderSizePixel = 0
+closeBtn.MouseButton1Click:Connect(function()
+    guiFrame.Visible = false
 end)
 
-local Content = Instance.new("Frame")
-Content.Parent = GuiFrame
-Content.BackgroundTransparency = 1
-Content.Size = UDim2.new(1, -24 * scale, 1, -44 * scale)
-Content.Position = UDim2.new(0, 12 * scale, 0, 40 * scale)
+local content = Instance.new("Frame")
+content.Parent = guiFrame
+content.BackgroundTransparency = 1
+content.Size = UDim2.new(1, -24 * scale, 1, -44 * scale)
+content.Position = UDim2.new(0, 12 * scale, 0, 40 * scale)
 
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Parent = Content
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Size = UDim2.new(1, 0, 0, 24 * scale)
-StatusLabel.Position = UDim2.new(0, 0, 0, 0)
-StatusLabel.Text = "📌 Status: Idle"
-StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-StatusLabel.TextSize = 13 * scale
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatusLabel.Font = Enum.Font.Gotham
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Parent = content
+statusLabel.BackgroundTransparency = 1
+statusLabel.Size = UDim2.new(1, 0, 0, 24 * scale)
+statusLabel.Position = UDim2.new(0, 0, 0, 0)
+statusLabel.Text = "📌 Status: Idle"
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.TextSize = 13 * scale
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Font = Enum.Font.Gotham
 
-local LevelLabel = Instance.new("TextLabel")
-LevelLabel.Parent = Content
-LevelLabel.BackgroundTransparency = 1
-LevelLabel.Size = UDim2.new(1, 0, 0, 24 * scale)
-LevelLabel.Position = UDim2.new(0, 0, 0, 26 * scale)
-LevelLabel.Text = "📊 Level: " .. tostring(Player.Data.Level.Value)
-LevelLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-LevelLabel.TextSize = 13 * scale
-LevelLabel.TextXAlignment = Enum.TextXAlignment.Left
-LevelLabel.Font = Enum.Font.Gotham
+local levelLabel = Instance.new("TextLabel")
+levelLabel.Parent = content
+levelLabel.BackgroundTransparency = 1
+levelLabel.Size = UDim2.new(1, 0, 0, 24 * scale)
+levelLabel.Position = UDim2.new(0, 0, 0, 26 * scale)
+levelLabel.Text = "📊 Level: " .. tostring(player.Data.Level.Value)
+levelLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+levelLabel.TextSize = 13 * scale
+levelLabel.TextXAlignment = Enum.TextXAlignment.Left
+levelLabel.Font = Enum.Font.Gotham
 
-local NPCLabel = Instance.new("TextLabel")
-NPCLabel.Parent = Content
-NPCLabel.BackgroundTransparency = 1
-NPCLabel.Size = UDim2.new(1, 0, 0, 24 * scale)
-NPCLabel.Position = UDim2.new(0, 0, 0, 52 * scale)
-NPCLabel.Text = "🎯 NPC: Waiting..."
-NPCLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-NPCLabel.TextSize = 13 * scale
-NPCLabel.TextXAlignment = Enum.TextXAlignment.Left
-NPCLabel.Font = Enum.Font.Gotham
+local npcLabel = Instance.new("TextLabel")
+npcLabel.Parent = content
+npcLabel.BackgroundTransparency = 1
+npcLabel.Size = UDim2.new(1, 0, 0, 24 * scale)
+npcLabel.Position = UDim2.new(0, 0, 0, 52 * scale)
+npcLabel.Text = "🎯 NPC: Waiting..."
+npcLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+npcLabel.TextSize = 13 * scale
+npcLabel.TextXAlignment = Enum.TextXAlignment.Left
+npcLabel.Font = Enum.Font.Gotham
 
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Parent = Content
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 70)
-ToggleBtn.BackgroundTransparency = 0
-ToggleBtn.BorderSizePixel = 0
-ToggleBtn.Size = UDim2.new(1, 0, 0, 44 * scale)
-ToggleBtn.Position = UDim2.new(0, 0, 0, 82 * scale)
-ToggleBtn.Text = "▶️ Start Farming"
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.TextSize = 16 * scale
-ToggleBtn.Font = Enum.Font.GothamBold
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Parent = content
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 70)
+toggleBtn.BackgroundTransparency = 0
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Size = UDim2.new(1, 0, 0, 44 * scale)
+toggleBtn.Position = UDim2.new(0, 0, 0, 82 * scale)
+toggleBtn.Text = "▶️ Start Farming"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 16 * scale
+toggleBtn.Font = Enum.Font.GothamBold
 
-local BtnCorner = Instance.new("UICorner")
-BtnCorner.Parent = ToggleBtn
-BtnCorner.CornerRadius = UDim.new(0, 10)
+local btnCorner = Instance.new("UICorner")
+btnCorner.Parent = toggleBtn
+btnCorner.CornerRadius = UDim.new(0, 10)
 
 -- Farming state
 local isFarming = false
@@ -255,13 +244,13 @@ local farmThread = nil
 local stopFarming = false
 
 -- Toggle function
-ToggleBtn.MouseButton1Click:Connect(function()
+toggleBtn.MouseButton1Click:Connect(function()
     isFarming = not isFarming
 
     if isFarming then
-        ToggleBtn.Text = "⏹️ Stop Farming"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        StatusLabel.Text = "📌 Status: Farming..."
+        toggleBtn.Text = "⏹️ Stop Farming"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        statusLabel.Text = "📌 Status: Farming..."
         print("▶️ Farming started by GUI")
         stopFarming = false
 
@@ -273,9 +262,9 @@ ToggleBtn.MouseButton1Click:Connect(function()
         end)
         coroutine.resume(farmThread)
     else
-        ToggleBtn.Text = "▶️ Start Farming"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 70)
-        StatusLabel.Text = "📌 Status: Stopped"
+        toggleBtn.Text = "▶️ Start Farming"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 70)
+        statusLabel.Text = "📌 Status: Stopped"
         print("⏹️ Farming stopped by GUI")
         stopFarming = true
 
@@ -287,37 +276,27 @@ ToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Update GUI function
-function UpdateGUIStatus(npcName: string?, level: number?)
+function UpdateGUIStatus(npcName, level)
     if level then
-        LevelLabel.Text = "📊 Level: " .. tostring(level)
+        levelLabel.Text = "📊 Level: " .. tostring(level)
     end
     if npcName then
-        NPCLabel.Text = "🎯 NPC: " .. npcName
+        npcLabel.Text = "🎯 NPC: " .. npcName
     end
     if isFarming then
-        StatusLabel.Text = "📌 Status: Farming..."
+        statusLabel.Text = "📌 Status: Farming..."
     end
 end
 
--- Show the GUI
-GuiFrame.Visible = true
-GuiFrame.ZIndex = 999
+-- FORCE GUI TO SHOW
+guiFrame.Visible = true
+guiFrame.ZIndex = 999
+print("✅ GUI created and forced to show!")
 
 -- ============================
 -- SEA 1 NPC DATA
 -- ============================
-type NPCData = {
-    Name: string,
-    Quest: string,
-    QuestLv: number,
-    CFrameQ: CFrame,
-    CFrameMon: CFrame,
-    MinLevel: number,
-    MaxLevel: number,
-    Entrance: Vector3?,
-}
-
-local Sea1NPCs: { [string]: NPCData } = {}
+local Sea1NPCs = {}
 
 Sea1NPCs["Bandit"] = {
     Name = "Bandit",
@@ -586,9 +565,9 @@ Sea1NPCs["Galley Captain"] = {
 -- ============================
 -- GET CURRENT NPC DATA
 -- ============================
-local function GetCurrentNPCData(): NPCData?
-    local level = Player.Data.Level.Value
-    for _, data in Sea1NPCs do
+function GetCurrentNPCData()
+    local level = player.Data.Level.Value
+    for _, data in pairs(Sea1NPCs) do
         if level >= data.MinLevel and level <= data.MaxLevel then
             return data
         end
@@ -599,42 +578,38 @@ end
 -- ============================
 -- TELEPORT TO ZONE
 -- ============================
-local function TeleportToZone(npcData: NPCData?)
-    if not npcData then
-        return
-    end
+function TeleportToZone(npcData)
+    if not npcData then return end
 
-    if npcData.Entrance and (Character.HumanoidRootPart.Position - npcData.CFrameMon.Position).Magnitude > 3000 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", npcData.Entrance)
-        task.wait(1)
+    if npcData.Entrance and (character.HumanoidRootPart.Position - npcData.CFrameMon.Position).Magnitude > 3000 then
+        replicatedStorage.Remotes.CommF_:InvokeServer("requestEntrance", npcData.Entrance)
+        wait(1)
     end
 
     TeleportTo(npcData.CFrameQ)
-    task.wait(0.5)
+    wait(0.5)
 end
 
 -- ============================
 -- GET QUEST
 -- ============================
-local function GetQuest(npcData: NPCData?): boolean
-    if not npcData then
-        return false
-    end
+function GetQuest(npcData)
+    if not npcData then return false end
 
-    local questGUI = Player.PlayerGui.Main.Quest
+    local questGUI = player.PlayerGui.Main.Quest
     if questGUI.Visible and string.find(questGUI.Container.QuestTitle.Title.Text, npcData.Name) then
         return true
     end
 
-    ReplicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
-    task.wait(0.5)
+    replicatedStorage.Remotes.CommF_:InvokeServer("AbandonQuest")
+    wait(0.5)
 
     TeleportTo(npcData.CFrameQ)
-    task.wait(0.5)
+    wait(0.5)
 
-    if (npcData.CFrameQ.Position - Character.HumanoidRootPart.Position).Magnitude <= 10 then
-        ReplicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", npcData.Quest, npcData.QuestLv)
-        task.wait(0.5)
+    if (npcData.CFrameQ.Position - character.HumanoidRootPart.Position).Magnitude <= 10 then
+        replicatedStorage.Remotes.CommF_:InvokeServer("StartQuest", npcData.Quest, npcData.QuestLv)
+        wait(0.5)
         return true
     end
 
@@ -644,24 +619,20 @@ end
 -- ============================
 -- COMBAT - BRING & ATTACK
 -- ============================
-local function BringAndAttack(mob: Model, npcData: NPCData?)
-    if not mob or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 then
-        return
-    end
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then
-        return
-    end
+function BringAndAttack(mob, npcData)
+    if not mob or not mob:FindFirstChild("Humanoid") or mob.Humanoid.Health <= 0 then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
 
     local mobHumanoid = mob.Humanoid
     local mobRoot = mob.HumanoidRootPart
 
     repeat
-        task.wait(0.05)
+        wait(0.05)
 
         AutoHaki()
 
         if Settings.BringMob then
-            mobRoot.CFrame = Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -8)
+            mobRoot.CFrame = character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -8)
             mobRoot.Size = Vector3.new(60, 60, 60)
             mobRoot.Transparency = 1
             mobRoot.CanCollide = false
@@ -673,13 +644,13 @@ local function BringAndAttack(mob: Model, npcData: NPCData?)
         end
 
         -- Equip and use combat tool
-        local combatTool = Character:FindFirstChild("Combat")
+        local combatTool = character:FindFirstChild("Combat")
         if not combatTool then
-            local backpackTool = Player.Backpack:FindFirstChild("Combat")
+            local backpackTool = player.Backpack:FindFirstChild("Combat")
             if backpackTool then
-                Humanoid:EquipTool(backpackTool)
-                task.wait(0.1)
-                combatTool = Character:FindFirstChild("Combat")
+                humanoid:EquipTool(backpackTool)
+                wait(0.1)
+                combatTool = character:FindFirstChild("Combat")
             end
         end
 
@@ -689,19 +660,19 @@ local function BringAndAttack(mob: Model, npcData: NPCData?)
 
         -- Fast attack via CombatFramework
         pcall(function()
-            local combatFramework = require(Player.PlayerScripts.CombatFramework)
+            local combatFramework = require(player.PlayerScripts.CombatFramework)
             local controller = debug.getupvalues(combatFramework)[2]
             if controller and controller.activeController then
                 controller.activeController.attacking = false
                 controller.activeController.timeToNextAttack = 0
                 controller.activeController.hitboxMagnitude = 180
-                VirtualUser:CaptureController()
-                VirtualUser:Button1Down(Vector2.new(1280, 672))
+                virtualUser:CaptureController()
+                virtualUser:Button1Down(Vector2.new(1280, 672))
             end
         end)
 
         -- Check if quest is still active
-        local questGUI = Player.PlayerGui.Main.Quest
+        local questGUI = player.PlayerGui.Main.Quest
         if not questGUI.Visible or not string.find(questGUI.Container.QuestTitle.Title.Text, npcData.Name) then
             break
         end
@@ -711,7 +682,7 @@ local function BringAndAttack(mob: Model, npcData: NPCData?)
             break
         end
 
-    until not mob.Parent or mobHumanoid.Health <= 0 or not Player.Character or Humanoid.Health <= 0
+    until not mob.Parent or mobHumanoid.Health <= 0 or not player.Character or humanoid.Health <= 0
 end
 
 -- ============================
@@ -720,6 +691,7 @@ end
 local codesRedeemed = false
 
 function AutoFarm()
+    -- Auto redeem codes once per session
     if Settings.AutoRedeem and not codesRedeemed then
         RedeemAllCodes()
         codesRedeemed = true
@@ -727,37 +699,37 @@ function AutoFarm()
 
     print("🔥 Sea 1 Auto-Farm Started!")
     print("👊 Combat Only - LO + ENI Project")
-    print("📊 Current Level: " .. tostring(Player.Data.Level.Value))
+    print("📊 Current Level: " .. tostring(player.Data.Level.Value))
 
     while not stopFarming do
         pcall(function()
             local npcData = GetCurrentNPCData()
             if not npcData then
-                print("⚠️ No NPC found for level: " .. tostring(Player.Data.Level.Value))
-                task.wait(5)
+                print("⚠️ No NPC found for level: " .. tostring(player.Data.Level.Value))
+                wait(5)
                 return
             end
 
             -- Update GUI with current status
-            UpdateGUIStatus(npcData.Name, Player.Data.Level.Value)
+            UpdateGUIStatus(npcData.Name, player.Data.Level.Value)
 
             -- Print status every 30 seconds
             if tick() % 30 < 0.1 then
-                print("📊 Level: " .. tostring(Player.Data.Level.Value) .. " | Farming: " .. npcData.Name)
+                print("📊 Level: " .. tostring(player.Data.Level.Value) .. " | Farming: " .. npcData.Name)
             end
 
             TeleportToZone(npcData)
 
             local questStarted = GetQuest(npcData)
             if not questStarted then
-                task.wait(1)
+                wait(1)
                 return
             end
 
-            local enemies = Workspace:GetService("Enemies")
+            local enemies = workspace:GetService("Enemies")
             local foundMob = false
 
-            for _, mob in enemies:GetChildren() do
+            for _, mob in pairs(enemies:GetChildren()) do
                 if mob.Name == npcData.Name and mob:FindFirstChild("Humanoid") and mob.Humanoid.Health > 0 then
                     foundMob = true
                     BringAndAttack(mob, npcData)
@@ -766,10 +738,10 @@ function AutoFarm()
             end
 
             if not foundMob then
-                task.wait(0.5)
+                wait(0.5)
             end
 
-            task.wait(0.1)
+            wait(0.1)
         end)
     end
 end
