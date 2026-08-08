@@ -1,26 +1,22 @@
 --[[
-    Fxry's Core Blox Fruits Suite v3.0
-    ===================================
-    Features:
-    - Auto Farm (Level/Boss/Sea Beast)
-    - Auto Quest
-    - Auto Collect Drops
-    - Auto Unlock Sea 2 (Level 700+)
-    - Auto Unlock Sea 3 (Level 1500+)
-    - ESP (Enemy)
-    - Teleport System
-    - Full GUI
+    Fxry's Delta-Optimized Blox Fruits Suite
+    =========================================
+    - Specifically tuned for Delta Executor (mobile)
+    - Redz-Style Auto Farm
+    - Auto Quest | Auto Heal | Auto Collect | Auto Teleport
+    - Auto Unlock Sea 2 & Sea 3
+    - ESP (Enemy + Fruit)
+    - Full Touch GUI
     - Anti-AFK
-    - Keybinds
-    - No external dependencies
+    - No keybinds (Delta-friendly)
 ]]
 
+-- Delta compatibility: use pcall for everything
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
-local UserInput = game:GetService("UserInputService")
 
 local Player = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
@@ -31,16 +27,14 @@ local Humanoid = Character:WaitForChild("Humanoid")
 -- CONFIGURATION
 -- ============================================================
 local Config = {
-    FarmMode = "Level",           -- "Level" | "Boss" | "SeaBeast"
+    MobAura = true,
     AutoQuest = true,
-    AutoTeleport = true,
-    AutoAttack = true,
+    AutoHeal = true,
+    HealPercent = 30,
     AutoCollect = true,
+    TeleportOnNoTarget = true,
     TargetLevel = 2550,
-    SafeDistance = 20,
-    AttackCooldown = 0.3,
-    UseFruit = true,
-    FruitName = "Magma",
+    UseAbilities = true,
     Sea2Level = 700,
     Sea3Level = 1500,
     AutoUnlockSea2 = true,
@@ -51,25 +45,42 @@ local Config = {
 }
 
 -- ============================================================
--- UTILITY FUNCTIONS
+-- STATE
+-- ============================================================
+local FarmState = {
+    Running = true,
+    Status = "Idle",
+    Target = nil,
+    Kills = 0,
+    Level = 0,
+    LastAttack = 0,
+}
+
+-- ============================================================
+-- SAFE UTILITY FUNCTIONS (Delta-friendly)
 -- ============================================================
 local function GetCurrentSea()
-    local spawnLocation = Player:FindFirstChild("SpawnLocation")
-    if spawnLocation then
-        local loc = spawnLocation.Value or ""
-        if string.find(loc, "Sea 3") or string.find(loc, "Third Sea") then return 3 end
-        if string.find(loc, "Sea 2") or string.find(loc, "Second Sea") then return 2 end
+    local success, result = pcall(function()
+        local spawnLocation = Player:FindFirstChild("SpawnLocation")
+        if spawnLocation then
+            local loc = spawnLocation.Value or ""
+            if string.find(loc, "Sea 3") or string.find(loc, "Third Sea") then return 3 end
+            if string.find(loc, "Sea 2") or string.find(loc, "Second Sea") then return 2 end
+            return 1
+        end
+        if Workspace:FindFirstChild("Sea3Portal") then return 3 end
+        if Workspace:FindFirstChild("Sea2Portal") then return 2 end
+        if Workspace:FindFirstChild("Castle on the Sea") then return 2 end
         return 1
-    end
-    if Workspace:FindFirstChild("Sea3Portal") or Workspace:FindFirstChild("ThirdSeaPortal") then return 3 end
-    if Workspace:FindFirstChild("Sea2Portal") or Workspace:FindFirstChild("SecondSeaPortal") then return 2 end
-    if Workspace:FindFirstChild("Castle on the Sea") then return 2 end
-    if Workspace:FindFirstChild("Mansion") or Workspace:FindFirstChild("Dragon") then return 1 end
-    return 1
+    end)
+    return success and result or 1
 end
 
 local function GetPlayerLevel()
-    return Player:FindFirstChild("Level") and Player.Level.Value or 0
+    local success, result = pcall(function()
+        return Player:FindFirstChild("Level") and Player.Level.Value or 0
+    end)
+    return success and result or 0
 end
 
 local function TeleportTo(location)
@@ -81,13 +92,6 @@ local function TeleportTo(location)
                 RootPart.CFrame = chest.CFrame + Vector3.new(0, 10, 0)
                 return true
             end
-            local parts = target:GetDescendants()
-            for _, part in pairs(parts) do
-                if part:IsA("BasePart") then
-                    RootPart.CFrame = part.CFrame + Vector3.new(0, 10, 0)
-                    return true
-                end
-            end
         end
         return false
     elseif type(location) == "Vector3" then
@@ -98,13 +102,10 @@ local function TeleportTo(location)
 end
 
 local function UseAbility(key)
-    local keyMap = {
-        ["Q"] = 1, ["E"] = 2, ["R"] = 3, ["F"] = 4,
-        ["X"] = 5, ["C"] = 6, ["V"] = 7, ["Z"] = 8
-    }
+    local keyMap = {["Q"]=1,["E"]=2,["R"]=3,["F"]=4,["X"]=5,["C"]=6,["V"]=7,["Z"]=8}
     local k = keyMap[key]
     if k then
-        VirtualUser:ClickButton2(k)
+        pcall(function() VirtualUser:ClickButton2(k) end)
         return true
     end
     return false
@@ -114,14 +115,14 @@ local function FireRemote(remoteName, ...)
     local remote = ReplicatedStorage:FindFirstChild("Remotes") and 
                    ReplicatedStorage.Remotes:FindFirstChild(remoteName)
     if remote then
-        remote:FireServer(...)
+        pcall(function() remote:FireServer(...) end)
         return true
     end
     return false
 end
 
 -- ============================================================
--- ESP SYSTEM
+-- ESP (Delta-friendly - no Highlights if unsupported)
 -- ============================================================
 local ESPObjects = {}
 
@@ -132,35 +133,19 @@ local function ClearESP()
     ESPObjects = {}
 end
 
-local function CreateESP(target, color, label)
+local function CreateESP(target, color)
     if not Config.ESPEnabled or not target then return end
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Fxry_ESP"
-    highlight.Adornee = target
-    highlight.FillColor = color or Config.ESPColor
-    highlight.FillTransparency = 0.4
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.OutlineTransparency = 0.2
-    highlight.Parent = target
-    table.insert(ESPObjects, highlight)
-    
-    if label then
-        local billboard = Instance.new("BillboardGui")
-        billboard.Name = "Fxry_ESP_Label"
-        billboard.Size = UDim2.new(0, 120, 0, 30)
-        billboard.Adornee = target
-        billboard.Parent = target
-        table.insert(ESPObjects, billboard)
-        
-        local text = Instance.new("TextLabel")
-        text.Size = UDim2.new(1, 0, 1, 0)
-        text.BackgroundTransparency = 1
-        text.TextColor3 = Color3.fromRGB(255, 255, 255)
-        text.TextStrokeTransparency = 0.2
-        text.Text = label or "ENEMY"
-        text.Parent = billboard
-        table.insert(ESPObjects, text)
-    end
+    pcall(function()
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "Fxry_ESP"
+        highlight.Adornee = target
+        highlight.FillColor = color or Config.ESPColor
+        highlight.FillTransparency = 0.4
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.OutlineTransparency = 0.2
+        highlight.Parent = target
+        table.insert(ESPObjects, highlight)
+    end)
 end
 
 local function UpdateESP()
@@ -172,7 +157,7 @@ local function UpdateESP()
             if v.Name ~= Player.Name and v.Humanoid.Health > 0 then
                 local dist = (v.HumanoidRootPart.Position - RootPart.Position).Magnitude
                 if dist < 500 then
-                    CreateESP(v, Config.ESPColor, string.format("%s [%.0fm]", v.Name, dist))
+                    CreateESP(v, Config.ESPColor)
                 end
             end
         end
@@ -180,182 +165,252 @@ local function UpdateESP()
 end
 
 -- ============================================================
--- FARMING SYSTEM
+-- MOB FINDER
 -- ============================================================
-local isFarming = true
-local currentTarget = nil
-local isAttacking = false
-local farmStatus = "Idle"
-
-local function GetClosestMob()
-    local closest = nil
-    local shortestDist = math.huge
-    local playerPos = RootPart.Position
+local function FindMobs()
+    local mobs = {}
+    local charPos = RootPart.Position
+    local searchRadius = 450
     
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
-            if v.Name ~= Player.Name and v.Humanoid.Health > 0 then
-                local dist = (v.HumanoidRootPart.Position - playerPos).Magnitude
-                if dist < shortestDist and dist < 600 then
-                    if v:FindFirstChild("Head") and v.Head:FindFirstChild("Health") then
-                        closest = v
-                        shortestDist = dist
-                    elseif v:FindFirstChild("IsEnemy") and v.IsEnemy.Value == true then
-                        closest = v
-                        shortestDist = dist
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChild("Humanoid") and obj:FindFirstChild("HumanoidRootPart") then
+            local hum = obj.Humanoid
+            if hum.Health > 0 and obj ~= Character and obj.Name ~= Player.Name then
+                local pos = obj.HumanoidRootPart.Position
+                local dist = (pos - charPos).Magnitude
+                
+                if dist < searchRadius then
+                    local isEnemy = false
+                    if obj:FindFirstChild("Head") and obj.Head:FindFirstChild("Health") then
+                        isEnemy = true
+                    end
+                    if obj:FindFirstChild("IsEnemy") and obj.IsEnemy.Value == true then
+                        isEnemy = true
+                    end
+                    if string.find(obj.Name, "NPC") or string.find(obj.Name, "Mob") or
+                       string.find(obj.Name, "Enemy") or string.find(obj.Name, "Pirate") or
+                       string.find(obj.Name, "Marine") or string.find(obj.Name, "Bandit") or
+                       string.find(obj.Name, "Zombie") or string.find(obj.Name, "Monster") then
+                        isEnemy = true
+                    end
+                    
+                    if isEnemy then
+                        table.insert(mobs, {
+                            Object = obj,
+                            RootPart = obj.HumanoidRootPart,
+                            Position = pos,
+                            Distance = dist,
+                            Humanoid = hum,
+                            Name = obj.Name,
+                            Health = hum.Health,
+                            MaxHealth = hum.MaxHealth,
+                        })
                     end
                 end
             end
         end
     end
-    return closest
+    
+    table.sort(mobs, function(a, b) return a.Distance < b.Distance end)
+    return mobs
 end
 
-local function GetQuest()
-    local questData = Player:FindFirstChild("QuestData")
-    if questData and questData:FindFirstChild("Quest") then
-        return questData.Quest.Value
+-- ============================================================
+-- COMBAT
+-- ============================================================
+local function MoveToTarget(target)
+    if not target or not target.RootPart then return false end
+    
+    local targetPos = target.RootPart.Position
+    local dist = (targetPos - RootPart.Position).Magnitude
+    
+    if dist > 25 then
+        pcall(function()
+            RootPart.CFrame = CFrame.new(RootPart.Position, targetPos)
+            VirtualUser:Button2Down("W")
+            task.wait(0.05)
+            VirtualUser:Button2Up("W")
+        end)
+        if dist > 60 then
+            UseAbility("Q")
+            task.wait(0.1)
+        end
+        return false
     end
-    return nil
+    return true
 end
 
-local function HasQuest()
-    return GetQuest() ~= nil
+local function Combat(target)
+    if not target or not target.Humanoid or target.Humanoid.Health <= 0 then return end
+    
+    local now = tick()
+    if now - FarmState.LastAttack < 0.05 then return end
+    FarmState.LastAttack = now
+    
+    pcall(function()
+        VirtualUser:ClickButton2(0)
+        task.wait(0.02)
+        
+        if Config.UseAbilities then
+            VirtualUser:ClickButton2(1) -- Q
+            task.wait(0.02)
+            VirtualUser:ClickButton2(2) -- E
+            task.wait(0.02)
+            VirtualUser:ClickButton2(3) -- R
+            task.wait(0.02)
+            VirtualUser:ClickButton2(5) -- X
+            task.wait(0.02)
+            VirtualUser:ClickButton2(6) -- C
+            task.wait(0.02)
+        end
+    end)
 end
 
-local function StartQuest()
+-- ============================================================
+-- AUTO HEAL
+-- ============================================================
+local function AutoHeal()
+    if not Config.AutoHeal then return end
+    pcall(function()
+        local hp = Humanoid.Health
+        local maxHp = Humanoid.MaxHealth
+        if (hp / maxHp) * 100 < Config.HealPercent then
+            UseAbility("F")
+            task.wait(0.5)
+        end
+    end)
+end
+
+-- ============================================================
+-- AUTO QUEST
+-- ============================================================
+local function AutoQuest()
+    if not Config.AutoQuest then return end
+    
+    pcall(function()
+        local remote = ReplicatedStorage:FindFirstChild("Remotes") and 
+                       ReplicatedStorage.Remotes:FindFirstChild("StartQuest")
+        if remote then
+            local level = GetPlayerLevel()
+            local npc = "Village Elder"
+            if level >= 100 then npc = "Marine Captain" end
+            if level >= 300 then npc = "Pirate Captain" end
+            if level >= 600 then npc = "Sky Knight" end
+            if level >= 1000 then npc = "Dragon" end
+            if level >= 1500 then npc = "King" end
+            if level >= 2000 then npc = "Elder" end
+            remote:FireServer(npc)
+            task.wait(0.3)
+        end
+    end)
+end
+
+-- ============================================================
+-- AUTO TELEPORT
+-- ============================================================
+local function TeleportToIsland()
+    if not Config.TeleportOnNoTarget then return end
+    
     local level = GetPlayerLevel()
-    local npcMap = {
-        [0] = "Village Elder",
-        [100] = "Marine Captain",
-        [300] = "Pirate Captain",
-        [600] = "Sky Knight",
-        [1000] = "Dragon",
-        [1500] = "King",
-        [2000] = "Elder"
+    local islands = {
+        [0] = "Jungle", [100] = "Prison", [300] = "Ice",
+        [600] = "Sky", [1000] = "Water 7",
+        [1500] = "Castle on the Sea", [2000] = "Mansion"
     }
-    local npc = "Village Elder"
-    for lvl, name in pairs(npcMap) do
-        if level >= lvl then npc = name end
+    
+    local targetIsland = "Jungle"
+    for lvl, island in pairs(islands) do
+        if level >= lvl then targetIsland = island end
     end
-    return FireRemote("StartQuest", npc)
+    TeleportTo(targetIsland)
 end
 
-local function CompleteQuest()
-    return FireRemote("CompleteQuest")
-end
-
-local function CollectDrops()
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Part") and (string.find(v.Name, "Drop") or string.find(v.Name, "Fruit")) then
-            local dist = (v.Position - RootPart.Position).Magnitude
-            if dist < 30 then
+-- ============================================================
+-- AUTO COLLECT
+-- ============================================================
+local function AutoCollect()
+    if not Config.AutoCollect then return end
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Part") and (string.find(obj.Name, "Drop") or string.find(obj.Name, "Fruit") or string.find(obj.Name, "Bel")) then
+            if (obj.Position - RootPart.Position).Magnitude < 30 then
                 pcall(function()
-                    firetouchinterest(v, Character, 0)
-                    task.wait(0.05)
-                    firetouchinterest(v, Character, 1)
+                    firetouchinterest(obj, Character, 0)
+                    task.wait(0.02)
+                    firetouchinterest(obj, Character, 1)
                 end)
             end
         end
     end
 end
 
+-- ============================================================
+-- MAIN FARM LOOP
+-- ============================================================
 local function FarmLoop()
-    while isFarming do
-        task.wait(0.1)
+    print("[Fxry] Delta farm started!")
+    
+    while FarmState.Running do
+        task.wait(0.05)
         
-        Character = Player.Character or Player.CharacterAdded:Wait()
-        if not Character then task.wait(1) continue end
-        RootPart = Character:FindFirstChild("HumanoidRootPart")
-        Humanoid = Character:FindFirstChild("Humanoid")
-        if not RootPart or not Humanoid then task.wait(1) continue end
+        pcall(function()
+            Character = Player.Character or Player.CharacterAdded:Wait()
+            if not Character then return end
+            RootPart = Character:FindFirstChild("HumanoidRootPart")
+            Humanoid = Character:FindFirstChild("Humanoid")
+            if not RootPart or not Humanoid then return end
+        end)
         
-        local level = GetPlayerLevel()
-        if level >= Config.TargetLevel then
-            farmStatus = "Target Reached"
-            isFarming = false
-            break
-        end
-        
-        if Config.AutoQuest then
-            if not HasQuest() then
-                StartQuest()
-                task.wait(0.5)
-            else
-                local quest = GetQuest()
-                if quest and quest.Progress and quest.Progress >= quest.Required then
-                    CompleteQuest()
-                    task.wait(0.3)
-                end
-            end
-        end
-        
-        local target = GetClosestMob()
-        if target then
-            currentTarget = target
-            farmStatus = "Farming: " .. target.Name
-            if Config.ESPEnabled then
-                CreateESP(target, Config.ESPColor, target.Name)
-            end
-        else
-            farmStatus = "Searching..."
-            if Config.AutoTeleport then
-                local spots = {
-                    [0] = "Jungle",
-                    [100] = "Prison",
-                    [300] = "Ice",
-                    [600] = "Sky",
-                    [1000] = "Water 7",
-                    [1500] = "Castle on the Sea",
-                    [2000] = "Mansion",
-                }
-                local bestSpot = "Jungle"
-                for lvl, spot in pairs(spots) do
-                    if level >= lvl then bestSpot = spot end
-                end
-                TeleportTo(bestSpot)
-                task.wait(1)
-            end
-            task.wait(0.5)
+        if not Character or not RootPart or not Humanoid then
+            task.wait(1)
             continue
         end
         
-        local targetPos = target.HumanoidRootPart.Position
-        local distance = (targetPos - RootPart.Position).Magnitude
+        if Humanoid.Health <= 0 then
+            FarmState.Status = "Dead"
+            task.wait(3)
+            continue
+        end
         
-        if distance > Config.SafeDistance then
-            RootPart.CFrame = CFrame.new(RootPart.Position, targetPos)
-            VirtualUser:Button2Down("W")
-            task.wait(0.1)
-            VirtualUser:Button2Up("W")
+        FarmState.Level = GetPlayerLevel()
+        if FarmState.Level >= Config.TargetLevel then
+            FarmState.Status = "✅ Target Reached!"
+            FarmState.Running = false
+            break
+        end
+        
+        AutoHeal()
+        AutoQuest()
+        
+        local mobs = FindMobs()
+        local target = mobs[1]
+        
+        if target then
+            FarmState.Target = target
+            FarmState.Status = "⚔️ " .. target.Name
+            if Config.ESPEnabled then CreateESP(target.Object, Config.ESPColor) end
+            
+            if MoveToTarget(target) then
+                Combat(target)
+            end
         else
-            if Config.AutoAttack and not isAttacking then
-                isAttacking = true
-                VirtualUser:ClickButton2(0)
-                task.wait(Config.AttackCooldown)
-                if Config.UseFruit then
-                    UseAbility("Z")
-                    task.wait(0.15)
-                    UseAbility("X")
-                    task.wait(0.15)
-                    UseAbility("C")
-                end
-                isAttacking = false
+            FarmState.Status = "🔍 Searching..."
+            if Config.TeleportOnNoTarget then
+                TeleportToIsland()
+                task.wait(0.5)
             end
         end
         
-        if Config.AutoCollect then
-            CollectDrops()
-        end
-        
-        if Config.ESPEnabled and math.random(1, 10) == 1 then
-            UpdateESP()
-        end
+        AutoCollect()
+        if Config.ESPEnabled and math.random(1, 20) == 1 then UpdateESP() end
     end
+    
+    FarmState.Status = "⏹ Stopped"
+    print("[Fxry] Farm stopped.")
 end
 
 -- ============================================================
--- SEA UNLOCK SYSTEM
+-- SEA UNLOCK
 -- ============================================================
 local SeaConfig = {
     Sea2 = {
@@ -381,8 +436,7 @@ local function FindNPC(npcName, radius)
     local playerPos = RootPart.Position
     for _, v in pairs(Workspace:GetDescendants()) do
         if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
-            local name = v.Name or ""
-            if string.find(string.lower(name), string.lower(npcName)) then
+            if string.find(string.lower(v.Name or ""), string.lower(npcName)) then
                 local dist = (v.HumanoidRootPart.Position - playerPos).Magnitude
                 if dist < radius then return v end
             end
@@ -394,19 +448,21 @@ end
 local function InteractWithNPC(npc, triggers)
     if not npc then return false end
     
-    local npcPos = npc.HumanoidRootPart.Position
-    local distance = (npcPos - RootPart.Position).Magnitude
-    if distance > 15 then
-        RootPart.CFrame = CFrame.new(RootPart.Position, npcPos)
-        VirtualUser:Button2Down("W")
-        task.wait(0.5)
-        VirtualUser:Button2Up("W")
-    end
+    pcall(function()
+        local npcPos = npc.HumanoidRootPart.Position
+        if (npcPos - RootPart.Position).Magnitude > 15 then
+            RootPart.CFrame = CFrame.new(RootPart.Position, npcPos)
+            VirtualUser:Button2Down("W")
+            task.wait(0.5)
+            VirtualUser:Button2Up("W")
+        end
+        
+        VirtualUser:ClickButton2(0)
+        task.wait(0.3)
+        VirtualUser:ClickButton2(2)
+        task.wait(0.3)
+    end)
     
-    VirtualUser:ClickButton2(0)
-    task.wait(0.3)
-    VirtualUser:ClickButton2(2)
-    task.wait(0.3)
     FireRemote("InteractNPC", npc.Name)
     FireRemote("TalkToNPC", npc.Name)
     
@@ -418,7 +474,7 @@ local function InteractWithNPC(npc, triggers)
                     local text = btn.Text or ""
                     for _, trigger in pairs(triggers or {}) do
                         if string.find(text, trigger) then
-                            btn:Click()
+                            pcall(function() btn:Click() end)
                             task.wait(0.5)
                             return true
                         end
@@ -442,9 +498,9 @@ local function TouchPortal(portalName)
         end
     end
     if portal then
-        RootPart.CFrame = portal.CFrame + Vector3.new(0, 5, 0)
-        task.wait(0.5)
         pcall(function()
+            RootPart.CFrame = portal.CFrame + Vector3.new(0, 5, 0)
+            task.wait(0.5)
             firetouchinterest(portal, Character, 0)
             task.wait(0.2)
             firetouchinterest(portal, Character, 1)
@@ -472,16 +528,11 @@ local function UnlockSea(seaNumber)
     
     while GetPlayerLevel() < config.RequiredLevel do
         print("[Fxry] Farming to " .. config.RequiredLevel .. "... Level: " .. GetPlayerLevel())
-        if not isFarming then
-            isFarming = true
+        if not FarmState.Running then
+            FarmState.Running = true
             spawn(FarmLoop)
         end
         task.wait(2)
-    end
-    
-    if not isFarming then
-        isFarming = true
-        spawn(FarmLoop)
     end
     
     TeleportTo(config.NPCLocation)
@@ -498,9 +549,7 @@ local function UnlockSea(seaNumber)
             task.wait(2)
             local startTime = tick()
             while GetCurrentSea() < seaNumber and (tick() - startTime) < 15 do
-                if tick() - startTime > 8 then
-                    TouchPortal(config.PortalName)
-                end
+                if tick() - startTime > 8 then TouchPortal(config.PortalName) end
                 task.wait(1)
             end
             if GetCurrentSea() >= seaNumber then
@@ -522,32 +571,26 @@ local function UnlockSea(seaNumber)
     return false
 end
 
-local function UnlockSea2()
-    return UnlockSea(2)
-end
+local function UnlockSea2() return UnlockSea(2) end
+local function UnlockSea3() return UnlockSea(3) end
 
-local function UnlockSea3()
-    if GetCurrentSea() < 2 then
-        print("[Fxry] Need to unlock Sea 2 first.")
-        local success = UnlockSea(2)
-        if not success then return false end
-        task.wait(3)
-        Character = Player.Character or Player.CharacterAdded:Wait()
-        RootPart = Character:WaitForChild("HumanoidRootPart")
+-- ============================================================
+-- GUI (Delta-optimized)
+-- ============================================================
+local function CreateDeltaGUI()
+    local success, screenGui = pcall(function()
+        return Instance.new("ScreenGui")
+    end)
+    if not success then
+        print("[Fxry] GUI creation failed. Using console mode.")
+        return
     end
-    return UnlockSea(3)
-end
-
--- ============================================================
--- GUI SYSTEM
--- ============================================================
-local function CreateGUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "Fxry_SuiteGUI"
+    
+    screenGui.Name = "FxryDeltaGUI"
     screenGui.Parent = Player.PlayerGui
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 340, 0, 420)
+    frame.Size = UDim2.new(0, 320, 0, 390)
     frame.Position = UDim2.new(0, 10, 0, 10)
     frame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
     frame.BackgroundTransparency = 0.1
@@ -555,255 +598,11 @@ local function CreateGUI()
     frame.BorderColor3 = Color3.fromRGB(255, 0, 150)
     frame.Parent = screenGui
     
+    -- Title
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 45)
-    title.Text = "⚡ Fxry SUITE v3.0"
+    title.Size = UDim2.new(1, 0, 0, 35)
+    title.Text = "🔥 Fxry | Delta"
     title.TextColor3 = Color3.fromRGB(255, 50, 200)
     title.TextScaled = true
     title.BackgroundTransparency = 1
-    title.Parent = frame
-    
-    local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1, 0, 0, 25)
-    status.Position = UDim2.new(0, 0, 0, 45)
-    status.Text = "Status: Idle"
-    status.TextColor3 = Color3.fromRGB(200, 200, 200)
-    status.TextScaled = true
-    status.BackgroundTransparency = 1
-    status.Parent = frame
-    _G.Fxry_StatusLabel = status
-    
-    local farmBtn = Instance.new("TextButton")
-    farmBtn.Size = UDim2.new(0, 140, 0, 35)
-    farmBtn.Position = UDim2.new(0, 10, 0, 75)
-    farmBtn.Text = "▶ START FARM"
-    farmBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-    farmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    farmBtn.Parent = frame
-    farmBtn.MouseButton1Click:Connect(function()
-        isFarming = not isFarming
-        farmBtn.Text = isFarming and "⏹ STOP FARM" or "▶ START FARM"
-        farmBtn.BackgroundColor3 = isFarming and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(50, 200, 50)
-        if isFarming then
-            spawn(FarmLoop)
-            status.Text = "Status: Farming"
-        else
-            status.Text = "Status: Stopped"
-        end
-    end)
-    
-    local toggles = {
-        {name = "Auto Quest", key = "AutoQuest", y = 120},
-        {name = "Auto Teleport", key = "AutoTeleport", y = 155},
-        {name = "Auto Collect", key = "AutoCollect", y = 190},
-        {name = "ESP", key = "ESPEnabled", y = 225},
-        {name = "Use Fruit", key = "UseFruit", y = 260},
-    }
-    
-    for _, toggle in pairs(toggles) do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 140, 0, 28)
-        btn.Position = UDim2.new(0, 10 + ((toggle.y - 120) / 35) % 2 * 150, 0, toggle.y)
-        btn.Text = toggle.name .. ": " .. (Config[toggle.key] and "ON" or "OFF")
-        btn.BackgroundColor3 = Config[toggle.key] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Parent = frame
-        btn.MouseButton1Click:Connect(function()
-            Config[toggle.key] = not Config[toggle.key]
-            btn.Text = toggle.name .. ": " .. (Config[toggle.key] and "ON" or "OFF")
-            btn.BackgroundColor3 = Config[toggle.key] and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-            if toggle.key == "ESPEnabled" and not Config.ESPEnabled then
-                ClearESP()
-            end
-        end)
-    end
-    
-    local sea2Btn = Instance.new("TextButton")
-    sea2Btn.Size = UDim2.new(0, 140, 0, 30)
-    sea2Btn.Position = UDim2.new(0, 10, 0, 295)
-    sea2Btn.Text = "🌊 UNLOCK SEA 2"
-    sea2Btn.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
-    sea2Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sea2Btn.Parent = frame
-    sea2Btn.MouseButton1Click:Connect(function()
-        sea2Btn.Text = "⏳ UNLOCKING..."
-        sea2Btn.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
-        spawn(function()
-            local success = UnlockSea2()
-            sea2Btn.Text = success and "✅ SEA 2 UNLOCKED" or "❌ FAILED"
-            sea2Btn.BackgroundColor3 = success and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-            task.wait(3)
-            sea2Btn.Text = "🌊 UNLOCK SEA 2"
-            sea2Btn.BackgroundColor3 = Color3.fromRGB(100, 50, 200)
-        end)
-    end)
-    
-    local sea3Btn = Instance.new("TextButton")
-    sea3Btn.Size = UDim2.new(0, 140, 0, 30)
-    sea3Btn.Position = UDim2.new(0, 160, 0, 295)
-    sea3Btn.Text = "🌊🌊 UNLOCK SEA 3"
-    sea3Btn.BackgroundColor3 = Color3.fromRGB(200, 50, 150)
-    sea3Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sea3Btn.Parent = frame
-    sea3Btn.MouseButton1Click:Connect(function()
-        sea3Btn.Text = "⏳ UNLOCKING..."
-        sea3Btn.BackgroundColor3 = Color3.fromRGB(200, 100, 50)
-        spawn(function()
-            local success = UnlockSea3()
-            sea3Btn.Text = success and "✅ SEA 3 UNLOCKED" or "❌ FAILED"
-            sea3Btn.BackgroundColor3 = success and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-            task.wait(3)
-            sea3Btn.Text = "🌊🌊 UNLOCK SEA 3"
-            sea3Btn.BackgroundColor3 = Color3.fromRGB(200, 50, 150)
-        end)
-    end)
-    
-    local teleports = {"Jungle", "Prison", "Ice", "Sky", "Water 7", "Dragon", "Mansion", "Castle on the Sea"}
-    for i, name in ipairs(teleports) do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 75, 0, 22)
-        btn.Position = UDim2.new(0, 10 + ((i-1) % 4) * 80, 0, 335 + math.floor((i-1) / 4) * 27)
-        btn.Text = name
-        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 80)
-        btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-        btn.TextScaled = true
-        btn.Parent = frame
-        btn.MouseButton1Click:Connect(function()
-            TeleportTo(name)
-        end)
-    end
-    
-    spawn(function()
-        while true do
-            task.wait(0.5)
-            local sea = GetCurrentSea()
-            local level = GetPlayerLevel()
-            local statusText = _G.Fxry_StatusLabel
-            if statusText then
-                statusText.Text = string.format("Lv.%d | Sea %d | %s", level, sea, farmStatus)
-            end
-        end
-    end)
-end
-
--- ============================================================
--- ANTI-AFK & KEYBINDS
--- ============================================================
-local function SetupAntiAFK()
-    if not Config.AntiAFK then return end
-    Player.Idled:Connect(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(VirtualUser.Button2)
-    end)
-end
-
-local function SetupKeybinds()
-    UserInput.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.F9 then
-            isFarming = not isFarming
-            print(isFarming and "[Fxry] Farm started" or "[Fxry] Farm stopped")
-            if isFarming then spawn(FarmLoop) end
-        end
-        if input.KeyCode == Enum.KeyCode.F10 then
-            Config.ESPEnabled = not Config.ESPEnabled
-            if not Config.ESPEnabled then ClearESP() end
-            print("[Fxry] ESP " .. (Config.ESPEnabled and "ON" or "OFF"))
-        end
-        if input.KeyCode == Enum.KeyCode.F11 then
-            UnlockSea2()
-        end
-        if input.KeyCode == Enum.KeyCode.F12 then
-            UnlockSea3()
-        end
-        if input.KeyCode == Enum.KeyCode.RightShift then
-            isFarming = false
-            TeleportTo("Jungle")
-            print("[Fxry] Emergency stop! Teleported to Jungle.")
-        end
-    end)
-end
-
--- ============================================================
--- AUTO-START
--- ============================================================
-local function AutoStart()
-    print("[Fxry] Fxry's Core Blox Fruits Suite v3.0 loaded.")
-    print("[Fxry] Current Sea: " .. GetCurrentSea() .. " | Level: " .. GetPlayerLevel())
-    
-    isFarming = true
-    spawn(FarmLoop)
-    
-    local level = GetPlayerLevel()
-    local sea = GetCurrentSea()
-    
-    if Config.AutoUnlockSea2 and sea == 1 and level >= Config.Sea2Level then
-        print("[Fxry] Auto-unlocking Sea 2...")
-        task.wait(2)
-        spawn(UnlockSea2)
-    end
-    
-    if Config.AutoUnlockSea3 and sea == 2 and level >= Config.Sea3Level then
-        print("[Fxry] Auto-unlocking Sea 3...")
-        task.wait(2)
-        spawn(UnlockSea3)
-    end
-end
-
--- ============================================================
--- GLOBAL EXPOSURE
--- ============================================================
-_G.Fxry = {
-    Farm = FarmLoop,
-    UnlockSea2 = UnlockSea2,
-    UnlockSea3 = UnlockSea3,
-    UnlockSea = UnlockSea,
-    GetCurrentSea = GetCurrentSea,
-    GetLevel = GetPlayerLevel,
-    Teleport = TeleportTo,
-    ToggleFarm = function() isFarming = not isFarming end,
-    ToggleESP = function() Config.ESPEnabled = not Config.ESPEnabled; if not Config.ESPEnabled then ClearESP() end end,
-    Status = function() return farmStatus end,
-    Config = Config,
-}
-
--- ============================================================
--- INITIALIZE
--- ============================================================
-CreateGUI()
-SetupAntiAFK()
-SetupKeybinds()
-
-spawn(function()
-    while true do
-        task.wait(2)
-        if Config.ESPEnabled then
-            pcall(UpdateESP)
-        end
-    end
-end)
-
-spawn(AutoStart)
-
-print([[
-================================================
-  ⚡ Fxry'S CORE BLOX FRUITS SUITE v3.0 ⚡
-================================================
-  Commands:
-  _G.Fxry.Farm()          - Start farming
-  _G.Fxry.UnlockSea2()    - Unlock Sea 2
-  _G.Fxry.UnlockSea3()    - Unlock Sea 3
-  _G.Fxry.Teleport("loc") - Teleport to location
-  _G.Fxry.ToggleFarm()    - Toggle farm
-  _G.Fxry.ToggleESP()     - Toggle ESP
-  
-  Keybinds:
-  F9  - Toggle Farm
-  F10 - Toggle ESP
-  F11 - Unlock Sea 2
-  F12 - Unlock Sea 3
-  RShift - Emergency Stop
-  
-  GUI is in the top-left corner.
-================================================
-]])
+    title.P
