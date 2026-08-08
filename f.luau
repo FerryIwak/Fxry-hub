@@ -9,7 +9,7 @@ end
 _G.Settings = {
 
 	Main = {
-		["Auto Farm Level"] = false,
+		["Auto Farm Level"] = true,
 		["Fast Auto Farm Level"] = false,
 
 		--[Mob Aura]
@@ -18,7 +18,7 @@ _G.Settings = {
 		["Mob Aura"] = false,
 
 		--[World 1]
-		["Auto New World"] = false,
+		["Auto New World"] = truw,
 		["Auto Saber"] = false,
 		["Auto Pole"] = false,
 
@@ -123,7 +123,7 @@ _G.Settings = {
 	},
 	Stat = {
 		--[Auto Stats]
-		["Enabled Auto Stats"] = false,
+		["Enabled Auto Stats"] = true,
 		["Auto Stats Kaitun"] = false,
 
 		["Select Stats"] = {"Melee"}, --{Max Stats,Melee,Defense,Sword,Devil Fruit,Gun}
@@ -131,7 +131,7 @@ _G.Settings = {
 
 		--[Auto Redeem Code]
 
-		["Enabled Auto Redeem Code"] = false,
+		["Enabled Auto Redeem Code"] = true,
 		["Select Level Redeem Code"] = 1, --{Max : 2400}
 	},
 
@@ -156,8 +156,8 @@ _G.Settings = {
 	},
 
 	Fruits = {
-		["Auto Buy Random Fruits"] = false,
-		["Auto Store Fruits"] = false,
+		["Auto Buy Random Fruits"] = true,
+		["Auto Store Fruits"] = true,
 
 		["Select Devil Fruits"] = {}, -- {"Bomb-Bomb","Spike-Spike","Chop-Chop","Spring-Spring","Kilo-Kilo","Spin-Spin","Kilo-Kilo","Spin-Spin","Bird: Falcon","Smoke-Smoke","Flame-Flame","Ice-Ice","Sand-Sand","Dark-Dark","Revive-Revive","Diamond-Diamond","Light-Light","Love-Love","Rubber-Rubber","Barrier-Barrier","Magma-Magma","Door-Door","Quake-Quake","Human-Human: Buddha","String-String","Bird-Bird: Phoenix","Rumble-Rumble","Paw-Paw","Gravity-Gravity","Dough-Dough","Shadow-Shadow","Venom-Venom","Control-Control","Soul-Soul","Dragon-Dragon"}
 		["Auto Buy Devil Fruits Sniper"] = false,
@@ -183,7 +183,7 @@ _G.Settings = {
 		["FPS"] = 60,
 		["LockFPS"] = true,
 		["Boost FPS Windows"] = false,
-		['White Screen'] = false,
+		['White Screen'] = true,
 	},
 	ConfigsUI = {
 		ColorUI = Color3.fromRGB(255, 0, 127), --{Color UI}
